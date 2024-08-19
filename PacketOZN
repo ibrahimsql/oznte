@@ -1,0 +1,350 @@
+using PacketDotNet;
+using SharpPcap;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace EvilTwinAttack
+{
+    // Temel paket işleme sınıfı
+    public abstract class PacketHandlerBase
+    {
+        protected readonly ICaptureDevice device;
+        private readonly List<Packet> packetLog = new List<Packet>();
+
+        protected PacketHandlerBase(string deviceName)
+        {
+            device = CaptureDeviceList.Instance.FirstOrDefault(d => d.Name == deviceName);
+            if (device == null)
+                throw new ArgumentException("Cihaz bulunamadı: " + deviceName);
+
+            device.OnPacketArrival += OnPacketArrival;
+            device.Open(DeviceMode.Promiscuous, 1000);
+        }
+
+        public void StartCapturing()
+        {
+            Console.WriteLine("Capturing started on device: " + device.Description);
+            device.StartCapture();
+        }
+
+        public void StopCapturing()
+        {
+            device.StopCapture();
+            Console.WriteLine("Capturing stopped on device: " + device.Description);
+        }
+
+        public void SavePacketLog(string filePath)
+        {
+            using (StreamWriter writer = new StreamWriter(filePath, false, Encoding.UTF8))
+            {
+                foreach (var packet in packetLog)
+                {
+                    writer.WriteLine(packet.ToString());
+                }
+            }
+            Console.WriteLine("Packet log saved to: " + filePath);
+        }
+
+        public void PrintPacketLog()
+        {
+            Console.WriteLine("Packet Log:");
+            foreach (var packet in packetLog)
+            {
+                Console.WriteLine(packet.ToString());
+            }
+        }
+
+        protected abstract void OnPacketArrival(object sender, CaptureEventArgs e);
+
+        protected void LogPacket(Packet packet)
+        {
+            packetLog.Add(packet);
+        }
+    }
+
+    // Basit paket işleyici
+    public class BasicPacketHandler : PacketHandlerBase
+    {
+        public BasicPacketHandler(string deviceName) : base(deviceName) { }
+
+        protected override void OnPacketArrival(object sender, CaptureEventArgs e)
+        {
+            var packet = Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+            LogPacket(packet);
+            ProcessPacket(packet);
+        }
+
+        private void ProcessPacket(Packet packet)
+        {
+            if (packet is EthernetPacket ethernetPacket)
+            {
+                Console.WriteLine("Ethernet Packet: " + ethernetPacket.ToString());
+                ProcessPayload(ethernetPacket.PayloadPacket);
+            }
+        }
+
+        private void ProcessPayload(Packet payload)
+        {
+            if (payload is IpPacket ipPacket)
+            {
+                Console.WriteLine("IP Packet: " + ipPacket.ToString());
+                ProcessTransportLayer(ipPacket.PayloadPacket);
+            }
+        }
+
+        private void ProcessTransportLayer(Packet transportLayerPacket)
+        {
+            if (transportLayerPacket is TcpPacket tcpPacket)
+            {
+                Console.WriteLine("TCP Packet: " + tcpPacket.ToString());
+            }
+            else if (transportLayerPacket is UdpPacket udpPacket)
+            {
+                Console.WriteLine("UDP Packet: " + udpPacket.ToString());
+            }
+        }
+    }
+
+    // Gelişmiş paket işleyici
+    public class AdvancedPacketHandler : PacketHandlerBase
+    {
+        public AdvancedPacketHandler(string deviceName) : base(deviceName) { }
+
+        protected override void OnPacketArrival(object sender, CaptureEventArgs e)
+        {
+            var packet = Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+            LogPacket(packet);
+            AdvancedProcessPacket(packet);
+        }
+
+        private void AdvancedProcessPacket(Packet packet)
+        {
+            if (packet is EthernetPacket ethernetPacket)
+            {
+                Console.WriteLine("Advanced Ethernet Packet: " + ethernetPacket.ToString());
+                AdvancedProcessPayload(ethernetPacket.PayloadPacket);
+            }
+        }
+
+        private void AdvancedProcessPayload(Packet payload)
+        {
+            if (payload is IpPacket ipPacket)
+            {
+                Console.WriteLine("Advanced IP Packet: " + ipPacket.ToString());
+                AdvancedProcessTransportLayer(ipPacket.PayloadPacket);
+            }
+        }
+
+        private void AdvancedProcessTransportLayer(Packet transportLayerPacket)
+        {
+            if (transportLayerPacket is TcpPacket tcpPacket)
+            {
+                Console.WriteLine("Advanced TCP Packet: " + tcpPacket.ToString());
+                // Ek TCP analizleri ve işlemler
+                AnalyzeTcpPacket(tcpPacket);
+            }
+            else if (transportLayerPacket is UdpPacket udpPacket)
+            {
+                Console.WriteLine("Advanced UDP Packet: " + udpPacket.ToString());
+                // Ek UDP analizleri ve işlemler
+                AnalyzeUdpPacket(udpPacket);
+            }
+        }
+
+        private void AnalyzeTcpPacket(TcpPacket tcpPacket)
+        {
+            // TCP paketini analiz et
+            Console.WriteLine("Analyzing TCP packet...");
+            // Örnek: TCP paketinin belirli alanlarını inceleme
+        }
+
+        private void AnalyzeUdpPacket(UdpPacket udpPacket)
+        {
+            // UDP paketini analiz et
+            Console.WriteLine("Analyzing UDP packet...");
+            // Örnek: UDP paketinin belirli alanlarını inceleme
+        }
+    }
+
+    // Filtreleme ve loglama işlevleri eklenmiş paket işleyici
+    public class FilteringPacketHandler : PacketHandlerBase
+    {
+        private readonly string filterCriteria;
+
+        public FilteringPacketHandler(string deviceName, string filterCriteria) : base(deviceName)
+        {
+            this.filterCriteria = filterCriteria;
+        }
+
+        protected override void OnPacketArrival(object sender, CaptureEventArgs e)
+        {
+            var packet = Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+            if (MatchesFilter(packet))
+            {
+                LogPacket(packet);
+                ProcessPacket(packet);
+            }
+        }
+
+        private bool MatchesFilter(Packet packet)
+        {
+            // Basit bir filtreleme kriteri
+            return packet.ToString().Contains(filterCriteria);
+        }
+
+        private void ProcessPacket(Packet packet)
+        {
+            Console.WriteLine("Filtered Packet: " + packet.ToString());
+            // Filtrelenmiş paket üzerinde işlemler yapılabilir
+        }
+    }
+
+    // Paketlerin detaylı loglaması ve analizini yapan işleyici
+    public class DetailedLoggingPacketHandler : PacketHandlerBase
+    {
+        public DetailedLoggingPacketHandler(string deviceName) : base(deviceName) { }
+
+        protected override void OnPacketArrival(object sender, CaptureEventArgs e)
+        {
+            var packet = Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+            LogPacket(packet);
+            DetailedProcessPacket(packet);
+        }
+
+        private void DetailedProcessPacket(Packet packet)
+        {
+            Console.WriteLine("Detailed Packet Info:");
+            Console.WriteLine(packet.ToString());
+
+            if (packet is EthernetPacket ethernetPacket)
+            {
+                Console.WriteLine("Detailed Ethernet Packet: " + ethernetPacket.ToString());
+                DetailedProcessPayload(ethernetPacket.PayloadPacket);
+            }
+        }
+
+        private void DetailedProcessPayload(Packet payload)
+        {
+            if (payload is IpPacket ipPacket)
+            {
+                Console.WriteLine("Detailed IP Packet: " + ipPacket.ToString());
+                DetailedProcessTransportLayer(ipPacket.PayloadPacket);
+            }
+        }
+
+        private void DetailedProcessTransportLayer(Packet transportLayerPacket)
+        {
+            if (transportLayerPacket is TcpPacket tcpPacket)
+            {
+                Console.WriteLine("Detailed TCP Packet: " + tcpPacket.ToString());
+                // Detaylı TCP analizleri
+            }
+            else if (transportLayerPacket is UdpPacket udpPacket)
+            {
+                Console.WriteLine("Detailed UDP Packet: " + udpPacket.ToString());
+                // Detaylı UDP analizleri
+            }
+        }
+    }
+
+    // Paket analiz işlevlerini ekleyen işleyici
+    public class AnalysisPacketHandler : PacketHandlerBase
+    {
+        public AnalysisPacketHandler(string deviceName) : base(deviceName) { }
+
+        protected override void OnPacketArrival(object sender, CaptureEventArgs e)
+        {
+            var packet = Packet.ParsePacket(e.Packet.LinkLayerType, e.Packet.Data);
+            LogPacket(packet);
+            AnalyzePacket(packet);
+        }
+
+        private void AnalyzePacket(Packet packet)
+        {
+            if (packet is EthernetPacket ethernetPacket)
+            {
+                Console.WriteLine("Analysis Ethernet Packet: " + ethernetPacket.ToString());
+                AnalyzePayload(ethernetPacket.PayloadPacket);
+            }
+        }
+
+        private void AnalyzePayload(Packet payload)
+        {
+            if (payload is IpPacket ipPacket)
+            {
+                Console.WriteLine("Analysis IP Packet: " + ipPacket.ToString());
+                AnalyzeTransportLayer(ipPacket.PayloadPacket);
+            }
+        }
+
+        private void AnalyzeTransportLayer(Packet transportLayerPacket)
+        {
+            if (transportLayerPacket is TcpPacket tcpPacket)
+            {
+                Console.WriteLine("Analysis TCP Packet: " + tcpPacket.ToString());
+                // TCP analizleri yapılabilir
+                AnalyzeTcpData(tcpPacket);
+            }
+            else if (transportLayerPacket is UdpPacket udpPacket)
+            {
+                Console.WriteLine("Analysis UDP Packet: " + udpPacket.ToString());
+                // UDP analizleri yapılabilir
+                AnalyzeUdpData(udpPacket);
+            }
+        }
+
+        private void AnalyzeTcpData(TcpPacket tcpPacket)
+        {
+            // TCP verilerini analiz et
+            Console.WriteLine("Analyzing TCP Data...");
+            // TCP başlık bilgileri ve veri analizi
+        }
+
+        private void AnalyzeUdpData(UdpPacket udpPacket)
+        {
+            // UDP verilerini analiz et
+            Console.WriteLine("Analyzing UDP Data...");
+            // UDP başlık bilgileri ve veri analizi
+        }
+    }
+
+    // Program başlatma kodu
+    public class Program
+    {
+        public static void Main(string[] args)
+        {
+            if (args.Length < 2)
+            {
+                Console.WriteLine("Kullanım: EvilTwinAttack <deviceName> <handlerType> [filterCriteria]");
+                return;
+            }
+
+            string deviceName = args[0];
+            string handlerType = args[1];
+            string filterCriteria = args.Length > 2 ? args[2] : string.Empty;
+
+            PacketHandlerBase handler = handlerType switch
+            {
+                "basic" => new BasicPacketHandler(deviceName),
+                "advanced" => new AdvancedPacketHandler(deviceName),
+                "filtering" => new FilteringPacketHandler(deviceName, filterCriteria),
+                "detailed" => new DetailedLoggingPacketHandler(deviceName),
+                "analysis" => new AnalysisPacketHandler(deviceName),
+                _ => throw new ArgumentException("Geçersiz handler türü: " + handlerType),
+            };
+
+            handler.StartCapturing();
+
+            Console.WriteLine("Press Enter to stop capturing...");
+            Console.ReadLine();
+
+            handler.StopCapturing();
+            handler.SavePacketLog("packets.log");
+            handler.PrintPacketLog();
+        }
+    }
+}
